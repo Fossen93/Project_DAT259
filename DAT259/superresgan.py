@@ -1,6 +1,39 @@
 from fastai.vision import *
+from torchvision.models import vgg16_bn
+from fastai.callbacks import *
 
-def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128):
+base_loss = F.l1_loss
+
+class FeatureLoss(nn.Module):
+    def __init__(self, m_feat, layer_ids, layer_wgts):
+        super().__init__()
+        self.m_feat = m_feat
+        self.loss_features = [self.m_feat[i] for i in layer_ids]
+        self.hooks = hook_outputs(self.loss_features, detach=False)
+        self.wgts = layer_wgts
+        self.metric_names = ['pixel',] + [f'feat_{i}' for i in range(len(layer_ids))
+              ] + [f'gram_{i}' for i in range(len(layer_ids))]
+
+    def make_features(self, x, clone=False):
+        self.m_feat(x)
+        return [(o.clone() if clone else o) for o in self.hooks.stored]
+    
+    def forward(self, input, target):
+        out_feat = self.make_features(target, clone=True)
+        in_feat = self.make_features(input)
+        self.feat_losses = [base_loss(input,target)]
+        self.feat_losses += [base_loss(f_in, f_out)*w
+                             for f_in, f_out, w in zip(in_feat, out_feat, self.wgts)]
+        self.feat_losses += [base_loss(gram_matrix(f_in), gram_matrix(f_out))*w**2 * 5e3
+                             for f_in, f_out, w in zip(in_feat, out_feat, self.wgts)]
+        self.metrics = dict(zip(self.metric_names, self.feat_losses))
+        return sum(self.feat_losses)
+    
+    def __del__(self): self.hooks.remove()
+
+
+
+def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128, num_epochs = 10):
     
     data = get_data_superres(file_names, path_mask_real, path_img_real, bs, size)
     
@@ -8,10 +41,10 @@ def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128):
     
     gc.collect();
     
-    learn.fit_one_cycle(10, slice(2e-3), pct_start=0.9)
+    learn.fit_one_cycle(num_epochs, slice(2e-3), pct_start=0.9)
     
     learn.unfreeze()
-    learn.fit_one_cycle(10, slice(1e-5,2e-3), pct_start=0.9)
+    learn.fit_one_cycle(num_epochs, slice(1e-5,2e-3), pct_start=0.9)
     learn.save('generator_' + str(len(file_names)))
     learn.show_results(rows=10, imgsize=5)
     
@@ -20,6 +53,12 @@ def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128):
     
     return learn
 
+def get_lbl(x, path):
+    x = Path(x)
+    x = x.stem
+    x = str(x)
+    s = x.split('_')[0]+ '_' + x.split('_')[1] + '.jpg'
+    return path/s
 
 def get_data_superres(df, path_mask_real, path_img_real, bs=32, size=128):
     src = ImageImageList.from_df(path=path_mask_real, df=df).split_by_rand_pct(0.1, seed=42)
@@ -53,3 +92,22 @@ def create_generator(data):
     learn = unet_learner(data, arch, wd=wd, loss_func=feat_loss, callback_fns=LossMetrics,
                      blur=True, norm_type=NormType.Weight)
     return learn
+
+
+def gram_matrix(x):
+    n,c,h,w = x.size()
+    x = x.view(n, c, -1)
+    return (x @ x.transpose(1,2))/(c*h*w)
+
+def save_preds_l1(dl, path, model):
+    i=0
+    names = dl.dataset.items
+    save_path=path
+    os.mkdir(save_path)
+    for b in dl:
+        preds = model.pred_batch(batch=b, reconstruct=True)
+        for o in preds:
+            
+            name = names[i].split('/')[-1]
+            o.save(save_path/name)
+            i += 1
