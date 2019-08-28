@@ -1,10 +1,14 @@
 from fastai.vision import *
 from fastai.vision.gan import *
+import torchvision
+from torchvision.utils import save_image
 from torchvision.models import vgg16_bn
 from fastai.callbacks import *
 import DAT259.setup as setup
  
 base_loss = F.l1_loss
+
+#Pretrain generator ------------------
 
 class FeatureLoss(nn.Module):
     def __init__(self, m_feat, layer_ids, layer_wgts):
@@ -60,6 +64,7 @@ def get_lbl(x, path):
     x = x.stem
     x = str(x)
     s = x.split('_')[0]+ '_' + x.split('_')[1] + '.jpg'
+    s = Path(s)
     return path/s
 
 def get_data_superres(df, path_mask_real, path_img_real, bs=32, size=128):
@@ -114,6 +119,9 @@ def save_preds_l1(dl, path, model):
             o.save(save_path/name)
             i += 1
 
+
+# Pretrain critic ---------------------------
+
 def train_critic(num_data, num_epochs = 10, wd = 1e-3):
      
     file_names2= setup.choose_data('data/gen_l1_' + str(num_data) )
@@ -152,3 +160,47 @@ def get_crit_data(df, bs=32, size=128):
 
 def create_critic_learner(data, metrics, wd = 1e-3, loss_critic = AdaptiveLoss(nn.BCEWithLogitsLoss())):
     return Learner(data, gan_critic(), metrics=metrics, loss_func=loss_critic, wd=wd)
+
+
+# Train GAN ----------------------------
+
+def train_gan (file_names, path_mask_real, path_img_real, num_epochs=100, bs=32, size=128, wd=1e-3):
+    
+    learn_crit=None
+    learn_gen=None
+    gc.collect()
+    
+    labeled_data= label_data(file_names, Path('data'), ['ISIC2018_Task1_Training_GroundTruth', "ISIC2018_Task1-2_Training_Input"])
+
+    data_crit = get_crit_data(labeled_data, bs=bs, size=size)
+    learn_crit = create_critic_learner(data_crit, metrics=None).load('critic_' + str(len(file_names)))
+    
+    print (data_crit)
+    
+    data_gen = get_data_superres(file_names,path_mask_real, path_img_real)
+    print(data_gen)
+    learn_gen = create_generator(data_gen)
+    
+    learn_gen.load('generator_' + str(len(file_names)))
+    
+    switcher = partial(AdaptiveGANSwitcher, critic_thresh=0.65)
+    learn = GANLearner.from_learners(learn_gen, learn_crit, weights_gen=(1.,50.), show_img=False, switcher=switcher,
+                                 opt_func=partial(optim.Adam, betas=(0.,0.99)), wd=wd)
+    learn.callback_fns.append(partial(GANDiscriminativeLR, mult_lr=5.))
+    
+    learn.fit(num_epochs, 1e-4)
+    learn.show_results(rows=8)
+    
+    return learn_gen
+
+
+def pred_gan (model, path_mask, path_gen, num_data):
+    os.mkdir(path_gen)
+    
+    for i in range(num_data):
+        #try:
+            img = open_image(str(path_mask) + '/mask_gen_' + str(i) + '.png')
+            a, pred_img, b = model.predict(img)
+            torchvision.utils.save_image(pred_img, str(path_gen) + '/img_gen_' + str(i) + '.png')
+        #except:
+         #   print ("exception")
