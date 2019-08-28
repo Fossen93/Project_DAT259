@@ -1,7 +1,9 @@
 from fastai.vision import *
+from fastai.vision.gan import *
 from torchvision.models import vgg16_bn
 from fastai.callbacks import *
-
+import DAT259.setup as setup
+ 
 base_loss = F.l1_loss
 
 class FeatureLoss(nn.Module):
@@ -39,7 +41,7 @@ def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128, 
     
     learn = create_generator(data)
     
-    gc.collect();
+    gc.collect()
     
     learn.fit_one_cycle(num_epochs, slice(2e-3), pct_start=0.9)
     
@@ -111,3 +113,42 @@ def save_preds_l1(dl, path, model):
             name = names[i].split('/')[-1]
             o.save(save_path/name)
             i += 1
+
+def train_critic(num_data, num_epochs = 10, wd = 1e-3):
+     
+    file_names2= setup.choose_data('data/gen_l1_' + str(num_data) )
+    labeled_data= label_data(file_names2, Path('data'), ['gen_l1_' + str(num_data), "ISIC2018_Task1-2_Training_Input"])
+    
+    data_crit = get_crit_data(labeled_data)
+    print(data_crit)
+    learn_critic = create_critic_learner(data_crit, accuracy_thresh_expand, wd)
+    
+    learn_critic.fit_one_cycle(num_epochs, 1e-3)
+    
+    learn_critic.save('critic_' + str(num_data))
+
+
+def label_data(df, path, classes):
+
+    labeled_data = pd.DataFrame(columns=['Filenames', 'label'])
+    for i in classes:
+        for j in range (len(df)):
+            if i.split('_')[-1] == 'Input':
+                name = df['Filenames'][j].split('_')[0] +'_'+df['Filenames'][j].split('_')[1]+'.jpg'
+                labeled_data = labeled_data.append({'Filenames':i+'/'+name, 'label':i}, ignore_index=True)
+            else:
+                labeled_data = labeled_data.append({'Filenames':i+'/'+df['Filenames'][j], 'label':i}, ignore_index=True)
+            
+        
+    return labeled_data
+
+def get_crit_data(df, bs=32, size=128):
+    src = ImageList.from_df(path=Path('data'), df=df).split_by_rand_pct(0.1, seed=42)
+    ll = src.label_from_df('label')
+    data = (ll.transform(get_transforms(), size=size)
+           .databunch(bs=bs).normalize(imagenet_stats))
+    data.c = 3
+    return data
+
+def create_critic_learner(data, metrics, wd = 1e-3, loss_critic = AdaptiveLoss(nn.BCEWithLogitsLoss())):
+    return Learner(data, gan_critic(), metrics=metrics, loss_func=loss_critic, wd=wd)
