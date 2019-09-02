@@ -114,7 +114,6 @@ def save_preds_l1(dl, path, model):
     for b in dl:
         preds = model.pred_batch(batch=b, reconstruct=True)
         for o in preds:
-            
             name = names[i].split('/')[-1]
             o.save(save_path/name)
             i += 1
