@@ -118,16 +118,15 @@ def seg_model(learn, model_name):
 
 
 def predict_on_test_data(learner, save_at):
-    if (os.path.isdir('data/128x128')==False): os.mkdir('data/128x128')
+    
     path_test_img = 'data/128x128/test_img'
     if (os.path.isdir(path_test_img)==False): os.mkdir(path_test_img)
     #hent test dataen
     test_img_list = os.listdir(path_test_img)
-    print(len(test_img_list))
     for i in range(len(test_img_list)):
-        print ("hei")
+        
         img_name = test_img_list[i]
-        full_img_path = path_test_img + img_name
+        full_img_path = path_test_img + '/' + img_name
         
         pred_name = img_name.split('.')[0] + '_prediction.png'
         full_pred_path = save_at + pred_name
@@ -137,3 +136,50 @@ def predict_on_test_data(learner, save_at):
         pred_img = learner.predict(img)
         # lagre bildene i riktig mappe for predictions
         torchvision.utils.save_image(pred_img[1], full_pred_path)
+
+def resize_img_folder(from_folder, to_folder, size, folder_name):
+
+    if (os.path.isdir('data/' + str(size) + 'x' + str(size))==False): os.mkdir('data/' + str(size) + 'x' + str(size))
+    if (os.path.isdir('data/' + str(size) + 'x' + str(size) + '/' + folder_name)==False): os.mkdir('data/' + str(size) + 'x' + str(size) + '/' + folder_name)
+    img_list = os.listdir(from_folder)
+    for i in range(len(img_list)):
+        img_name = img_list[i]
+        img_path = from_folder+img_name
+        img = open_image(img_path).apply_tfms(tfms=None,size=size)
+        save_as = to_folder+img_name
+        img.save(save_as)
+
+
+def dice_score (path_pred, path_targ):
+    pred_names = os.listdir(path_pred)
+    pred_names.sort()
+    targ_names = os.listdir(path_targ)
+    targ_names.sort()
+    dice_results = []
+    for i in range (len (pred_names)):    
+        pred = open_mask(path_pred + '/' + pred_names[i], div = True)
+        targ = open_mask(path_targ + '/' + targ_names[i], div = True)
+        
+        dice_coeff = dice(np.array(targ.data[0]), np.array(pred.data[0]))
+        dice_results.append(dice_coeff)
+    return sum(dice_results)/len(pred_names)
+
+
+def dice(gt, img):
+    """
+    Input:
+        gt: ground truth image data (as array)
+        img: image to compare to gt (as array)
+    Output: the Dice coefficient 
+            https://en.wikipedia.org/wiki/S%C3%B8rensen%E2%80%93Dice_coefficient#Formula
+    """
+    # Find where nonzero:
+    gt, img = [x > 0 for x in (gt, img)]
+    
+    # Numerator: 2 |gt intersect img|
+    numerator = 2 * np.sum(gt & img)
+    
+    # Denominator: |gt| + |img|
+    denominator = gt.sum() + img.sum()
+    
+    return numerator / denominator
