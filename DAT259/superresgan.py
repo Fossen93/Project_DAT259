@@ -39,8 +39,8 @@ class FeatureLoss(nn.Module):
 
 
 
-def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128, num_epochs = 10):
-    
+def train_generator(file_names, path_mask_real, path_img_real, save_path, bs=32, size=128, num_epochs = 10):
+    file_names = file_names.drop(['Image'], axis = 1)
     data = get_data_superres(file_names, path_mask_real, path_img_real, bs, size)
     
     learn = create_generator(data)
@@ -54,8 +54,9 @@ def train_generator(file_names, path_mask_real, path_img_real, bs=32, size=128, 
     learn.save('generator_' + str(len(file_names)))
     learn.show_results(rows=10, imgsize=5)
     
-    folder_name = 'gen_l1_' + str(len(file_names))
-    save_preds_l1(data.fix_dl, Path('data/' + folder_name), learn)
+    #folder_name = 'pretrained_masks' + str(len(file_names))
+    #setup.create_folder(save)
+    save_preds_l1(data.fix_dl, save_path, learn)
     
     return learn
 
@@ -109,13 +110,13 @@ def gram_matrix(x):
 def save_preds_l1(dl, path, model):
     i=0
     names = dl.dataset.items
-    save_path=path
-    os.mkdir(save_path)
+    #save_path=path
+    setup.create_folder(path)
     for b in dl:
         preds = model.pred_batch(batch=b, reconstruct=True)
         for o in preds:
             name = names[i].split('/')[-1]
-            o.save(save_path/name)
+            o.save(path/name)
             i += 1
 
 
@@ -164,7 +165,7 @@ def create_critic_learner(data, metrics, wd = 1e-3, loss_critic = AdaptiveLoss(n
 # Train GAN ----------------------------
 
 def train_gan (file_names, path_mask_real, path_img_real, num_epochs=100, bs=32, size=128, wd=1e-3):
-    
+
     learn_crit=None
     learn_gen=None
     gc.collect()

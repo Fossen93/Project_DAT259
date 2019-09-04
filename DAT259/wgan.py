@@ -1,18 +1,10 @@
-import matplotlib.pyplot as plt
 from os import listdir
-from PIL import Image as PImage
-import numpy as np
-import os
 import torchvision
-from torchvision.utils import save_image
-import torch
-import pandas as pd
 from fastai.vision import *
 from fastai.vision.gan import *
-from fastai.utils.mem import *
-from fastai.callbacks import *
-import matplotlib.pyplot as plt
 import cv2
+
+import DAT259.setup as setup
 
 
 def train_wgan (data, epochs):
@@ -40,16 +32,17 @@ def get_data_mask (path, df, bs=128, size=128):
                .normalize(stats = [torch.tensor([0.5,0.5,0.5]), torch.tensor([0.5,0.5,0.5])], do_x=False, do_y=True))
 
 
-def generate_masks(file_names, num_data_gen, path_mask_real, epochs_train=200, bs=128, size=128):
+def generate_masks(file_names, num_data_gen, path_mask_real, save_path, epochs=200, bs=128, size=128):
     
+    file_names = file_names.drop(['Image'], axis = 1)
     data = get_data_mask(path_mask_real, file_names, bs, size)
     
-    generator = train_wgan(data, epochs_train)
+    generator = train_wgan(data, epochs)
     
     #create images of random noise
-    file_name = 'generated_mask_' + str(len(file_names))
-    save_path=path_mask_real.split('/')[0] + '/' + file_name
-    os.mkdir(save_path)
+    #file_name = 'generated_masks_' + str(len(file_names))
+    save_path=Path(str(save_path))
+    setup.create_folder(save_path)
     num_gen_data=num_data_gen
     device = torch.device("cuda:0" if (torch.cuda.is_available() and 1 > 0) else "cpu")
 
