@@ -1,7 +1,7 @@
 from fastai.vision import *
 from fastai.vision.gan import *
 import torchvision
-from torchvision.utils import save_image
+#from torchvision.utils import save_image
 from torchvision.models import vgg16_bn
 from fastai.callbacks import *
 import DAT259.setup as setup
@@ -122,13 +122,14 @@ def save_preds_l1(dl, path, model):
 
 # Pretrain critic ---------------------------
 
-def train_critic(num_data, num_epochs = 10, wd = 1e-3):
-     
-    file_names2= setup.choose_data('data/gen_l1_' + str(num_data) )
-    labeled_data= label_data(file_names2, Path('data'), ['gen_l1_' + str(num_data), "ISIC2018_Task1-2_Training_Input"])
+def train_critic(num_data, path_org, path_pretrained, num_epochs = 10, wd = 1e-3):
+    file_names = {'Filenames': os.listdir(str(path_pretrained) + '/pretrained_images_' + str(num_data))}
+    file_names = pd.DataFrame(data=file_names)
+    
+    labeled_data= label_data(file_names, path_org, path_pretrained, ['pretrained_images_' + str(num_data), "ISIC2018_Task1-2_Training_Input"])
     
     data_crit = get_crit_data(labeled_data)
-    print(data_crit)
+    
     learn_critic = create_critic_learner(data_crit, accuracy_thresh_expand, wd)
     
     learn_critic.fit_one_cycle(num_epochs, 1e-3)
@@ -136,22 +137,22 @@ def train_critic(num_data, num_epochs = 10, wd = 1e-3):
     learn_critic.save('critic_' + str(num_data))
 
 
-def label_data(df, path, classes):
-
+def label_data(df, path_org, path_pretrained, classes):
+    
     labeled_data = pd.DataFrame(columns=['Filenames', 'label'])
     for i in classes:
-        for j in range (len(df)):
+        for j in df['Filenames']:#range (len(df)):
             if i.split('_')[-1] == 'Input':
-                name = df['Filenames'][j].split('_')[0] +'_'+df['Filenames'][j].split('_')[1]+'.jpg'
-                labeled_data = labeled_data.append({'Filenames':i+'/'+name, 'label':i}, ignore_index=True)
+                name = j.split('_')[0] +'_'+j.split('_')[1]+'.jpg'
+                labeled_data = labeled_data.append({'Filenames':str(path_org)+'/'+i+'/'+name, 'label':i}, ignore_index=True)
             else:
-                labeled_data = labeled_data.append({'Filenames':i+'/'+df['Filenames'][j], 'label':i}, ignore_index=True)
+                labeled_data = labeled_data.append({'Filenames':str(path_pretrained)+'/'+i+'/'+j, 'label':i}, ignore_index=True)
             
         
     return labeled_data
 
 def get_crit_data(df, bs=32, size=128):
-    src = ImageList.from_df(path=Path('data'), df=df).split_by_rand_pct(0.1, seed=42)
+    src = ImageList.from_df(path = Path(''), df=df).split_by_rand_pct(0.1, seed=42)
     ll = src.label_from_df('label')
     data = (ll.transform(get_transforms(), size=size)
            .databunch(bs=bs).normalize(imagenet_stats))
@@ -165,20 +166,20 @@ def create_critic_learner(data, metrics, wd = 1e-3, loss_critic = AdaptiveLoss(n
 # Train GAN ----------------------------
 
 def train_gan (file_names, path_mask_real, path_img_real, num_epochs=100, bs=32, size=128, wd=1e-3):
-
+    file_names = file_names.drop(['Image'], axis = 1)
+    file_names = file_names.rename(columns={"Mask": "Filenames"})
+    
     learn_crit=None
     learn_gen=None
     gc.collect()
     
-    labeled_data= label_data(file_names, Path('data'), ['ISIC2018_Task1_Training_GroundTruth', "ISIC2018_Task1-2_Training_Input"])
+    labeled_data= label_data(file_names, Path('data'), Path('data'), ['ISIC2018_Task1_Training_GroundTruth', "ISIC2018_Task1-2_Training_Input"])
 
     data_crit = get_crit_data(labeled_data, bs=bs, size=size)
     learn_crit = create_critic_learner(data_crit, metrics=None).load('critic_' + str(len(file_names)))
     
-    print (data_crit)
     
     data_gen = get_data_superres(file_names,path_mask_real, path_img_real)
-    print(data_gen)
     learn_gen = create_generator(data_gen)
     
     learn_gen.load('generator_' + str(len(file_names)))
@@ -195,7 +196,7 @@ def train_gan (file_names, path_mask_real, path_img_real, num_epochs=100, bs=32,
 
 
 def pred_gan (model, path_mask, path_gen, num_data):
-    os.mkdir(path_gen)
+    #os.mkdir(path_gen)
     
     for i in range(num_data):
         #try:
