@@ -1,7 +1,6 @@
 from fastai.vision import *
 from fastai.vision.gan import *
 import torchvision
-#from torchvision.utils import save_image
 from torchvision.models import vgg16_bn
 from fastai.callbacks import *
 import DAT259.setup as setup
@@ -196,12 +195,8 @@ def train_gan (file_names, path_mask_real, path_img_real, num_epochs=100, bs=32,
 
 
 def pred_gan (model, path_mask, path_gen, num_data):
-    #os.mkdir(path_gen)
     
     for i in range(num_data):
-        #try:
             img = open_image(str(path_mask) + '/mask_gen_' + str(i) + '.png')
             a, pred_img, b = model.predict(img)
             torchvision.utils.save_image(pred_img, str(path_gen) + '/img_gen_' + str(i) + '.png')
-        #except:
-         #   print ("exception")

@@ -1,5 +1,6 @@
 from fastai.vision import *
 import torchvision
+import DAT259.setup as setup
 
 def merge_df(path, img_folder, seg_folder, merge_with, number_of_gen_data):
     org_df = create_df_from_selected_files(merge_with)
@@ -139,14 +140,11 @@ def predict_on_test_data(learner, save_at):
 
 def resize_img_folder(from_folder, to_folder, size, folder_name):
 
-    if (os.path.isdir('data/' + str(size) + 'x' + str(size))==False): os.mkdir('data/' + str(size) + 'x' + str(size))
-    if (os.path.isdir('data/' + str(size) + 'x' + str(size) + '/' + folder_name)==False): os.mkdir('data/' + str(size) + 'x' + str(size) + '/' + folder_name)
-    img_list = os.listdir(from_folder)
-    for i in range(len(img_list)):
-        img_name = img_list[i]
-        img_path = from_folder+img_name
+    setup.create_folder(to_folder)
+    for i in folder_name:
+        img_path = str(from_folder)+ '/' +i
         img = open_image(img_path).apply_tfms(tfms=None,size=size)
-        save_as = to_folder+img_name
+        save_as = str(to_folder)+ '/' + i
         img.save(save_as)
 
 
