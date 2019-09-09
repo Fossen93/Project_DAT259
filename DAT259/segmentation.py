@@ -14,15 +14,21 @@ def create_df_from_selected_files(df_used_seg):
     mask_folder = 'ISIC2018_Task1_Training_GroundTruth/'
     img = []
     mask = []
-    
+
+    for i, j in df_used_seg. iterrows():
+        img_name = path + img_folder + j['Image']
+        seg_name = path + mask_folder + j['Mask']
+        img.append(img_name)
+        mask.append(seg_name)
+    """
     for i in range(len(df_used_seg)):
         x = str(df_used_seg.iloc[i,0])
-        img_name = img_folder + (x.split('_')[0]+ '_' + x.split('_')[1] + '.jpg')
+        img_name = path +img_folder + (x.split('_')[0]+ '_' + x.split('_')[1] + '.jpg')
         seg_name = path + mask_folder + x
         img.append(img_name)
         mask.append(seg_name)
-    
-    return pd.DataFrame({"img":img, "mask":mask})
+    """    
+    return pd.DataFrame({"Image":img, "Mask":mask})
 
 
 def create_seg_df(path, img_folder, seg_folder, num_of_data):
@@ -30,17 +36,17 @@ def create_seg_df(path, img_folder, seg_folder, num_of_data):
     img = []
     mask = []
     
-    img_path = os.listdir(path+img_folder + '/')
+    img_path = os.listdir(img_folder)
     for j in range(num_of_data-1):
         
         if(img_path[j].endswith('.png') | img_path[j].endswith('.jpg')): 
                 
-            img_name = img_folder+ '/' + img_path[j]
-            seg_name = path + seg_folder + '/' + find_mask(img_path[j])
+            img_name = str(img_folder)+ '/' + img_path[j]
+            seg_name = str(seg_folder) + '/' + find_mask(img_path[j])
             img.append(img_name)
             mask.append(seg_name)
-    
-    return pd.DataFrame({"img":img, "mask":mask})
+            #print(seg_name)
+    return pd.DataFrame({"Image":img, "Mask":mask})
 
 
 def find_mask(i):
@@ -54,7 +60,7 @@ def find_mask(i):
 def data_mix(data_path, df_inn, bs=8):
     
     path = Path(data_path)
-    
+    #print (path)
     # Create a new column for is_valid
     #df['is_valid'] = [True]*(df.shape[0]//2) + [False]*(df.shape[0]//2)
 
@@ -83,25 +89,25 @@ def data_mix(data_path, df_inn, bs=8):
     
     
     #src = (SegItemListCustom.from_folder(path).split_by_folder(image_folder, 'Test_img' ).label_from_func(get_y_fn, classes=codes))
-    src = (SegItemListCustom.from_df(df, path)
+    src = (SegItemListCustom.from_df(df, "")
             .split_by_rand_pct(0.1, seed=42)
-            .label_from_df('mask', classes=codes))
+            .label_from_df('Mask', classes=codes))
     
     
     data = (src.transform(tfms=get_transforms(), size=[128,128], tfm_y=True)
         .databunch(bs=bs)
         .normalize(imagenet_stats))
-    
+
     return data
 
 def create_learner(data):
     
     #types of algorithm to show how good the model is
-    metrics=[accuracy_thresh, dice]
+    metrics=[accuracy_thresh]
 
     #weight decay
     wd=1e-2
-
+    
     return unet_learner(data, models.resnet34, metrics=metrics, wd=wd)
 
 
@@ -115,6 +121,7 @@ def seg_model(learn, model_name):
     lrs = slice(lr/400,lr/4)
     
     learn.fit_one_cycle(1, lrs, pct_start=0.8)
+    
     learn.save(model_name)
 
 
@@ -153,6 +160,7 @@ def dice_score (path_pred, path_targ):
     pred_names.sort()
     targ_names = os.listdir(path_targ)
     targ_names.sort()
+    
     dice_results = []
     for i in range (len (pred_names)):    
         pred = open_mask(path_pred + '/' + pred_names[i], div = True)
