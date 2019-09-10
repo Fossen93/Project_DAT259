@@ -50,7 +50,9 @@ def train_generator(file_names, path_mask_real, path_img_real, save_path, bs=32,
     
     learn.unfreeze()
     learn.fit_one_cycle(num_epochs, slice(1e-5,2e-3), pct_start=0.9)
-    learn.save('generator_' + str(len(file_names)))
+    save_path2 = ()#Path('Projects/test/generator_' + str(len(file_names))))
+    print (save_path2)
+    learn.save(save_path2, return_path=True)
     learn.show_results(rows=10, imgsize=5)
     
     #folder_name = 'pretrained_masks' + str(len(file_names))
@@ -97,7 +99,7 @@ def create_generator(data):
     
     wd = 1e-3
     learn = unet_learner(data, arch, wd=wd, loss_func=feat_loss, callback_fns=LossMetrics,
-                     blur=True, norm_type=NormType.Weight)
+                     blur=True, norm_type=NormType.Weight, model_dir=Path('Projects/test/'))
     return learn
 
 
